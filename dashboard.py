@@ -12,13 +12,10 @@ uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
 
 # Logic to save PDF in local folder
 if uploaded_file is not None:
-  # Local folder name "uploads"
   save_folder = "uploads"
   os.makedirs(save_folder, exist_ok=True)
-
   file_path = os.path.join(save_folder, uploaded_file.name)
 
-  # Write/save file to local directory
   with open(file_path, "wb") as f:
     f.write(uploaded_file.getbuffer())
 
@@ -30,12 +27,22 @@ if uploaded_file is not None:
   # Chat/Query section below
   st.markdown("---")
   st.subheader("Chat with your PDF")
-
-  # User query input box
   user_query = st.text_input("Ask a question about your uploaded PDF:")
 
   if user_query:
-    st.info(f"You asked: '{user_query}' (Backend integration will be done in the next step!)")
+    # Yahan hum backend function ko call karenge jo app.py mein banaya hai
+    from app import process_user_query
+
+    with st.spinner("Generating answer using local Ollama (llama3.2:1b)..."):
+      response_text, context = process_user_query(file_path, user_query)
+
+      # Display Debug Context
+      with st.expander("🔍 View Retrieved PDF Context (Debug)"):
+        st.write(context)
+
+      # Display Answer
+      st.markdown("### Answer:")
+      st.write(response_text)
 
 else:
   st.info("Please upload a PDF file first.")
