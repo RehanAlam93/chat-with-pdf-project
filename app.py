@@ -6,32 +6,36 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 import streamlit as st
 
 
-def process_user_query(file_path, user_query):
-  """Backend function to handle PDF processing, retrieval, and LLM response."""
-  # Initialize retriever in session state if not already present
+def process_pdf_file(file_path):
+  """Loads, splits, and embeds the PDF immediately upon upload."""
   if "retriever" not in st.session_state:
-    # 1. Load the PDF file
-    loader = PyPDFLoader(file_path)
-    docs = loader.load()
+    with st.spinner(
+        "Processing PDF, creating embeddings, and setting up database..."
+    ):
+      # 1. Load the PDF file
+      loader = PyPDFLoader(file_path)
+      docs = loader.load()
 
-    # 2. Split the text into smaller chunks
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000, chunk_overlap=200
-    )
-    split_docs = text_splitter.split_documents(docs)
+      # 2. Split text into smaller chunks
+      text_splitter = RecursiveCharacterTextSplitter(
+          chunk_size=500, chunk_overlap=100
+      )
+      split_docs = text_splitter.split_documents(docs)
 
-    # 3. Initialize HuggingFace embeddings
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+      # 3. Initialize HuggingFace embeddings
+      embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-    # 4. Store chunks in Chroma vector database
-    vector_store = Chroma.from_documents(split_docs, embeddings)
+      # 4. Store chunks in Chroma vector database
+      vector_store = Chroma.from_documents(split_docs, embeddings)
 
-    # 5. Create retriever using MMR (Maximal Marginal Relevance)
-    st.session_state.retriever = vector_store.as_retriever(
-        search_type="mmr", search_kwargs={"k": 3}
-    )
+      # 5. Create retriever using MMR with k=5
+      st.session_state.retriever = vector_store.as_retriever(
+          search_type="mmr", search_kwargs={"k": 5}
+      )
 
-  # Retrieve relevant chunks using MMR retriever from session state
+
+def process_user_query(user_query):
+  """Generates an answer using the pre-built retriever and Ollama LLM immediately."""
   retriever = st.session_state.retriever
   retrieved_docs = retriever.invoke(user_query)
 
@@ -43,9 +47,10 @@ def process_user_query(file_path, user_query):
 
   # Formulate Prompt
   prompt = f"""
-    You are an assistant for question-answering tasks.
-    Use the following pieces of retrieved context to answer the question.
-    If you don't know the answer, say that you don't know.
+    You are an intelligent assistant. Read the provided context carefully and answer the question accurately.
+    If the question asks for specific details like email ID, name, phone number, or skills, extract and provide them clearly from the context.
+    If the information is not present in the context, state: "I could not find this information in the uploaded PDF."
+    Do not assume or use external knowledge.
 
     Context:
     {context}
